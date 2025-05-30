@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import fitz  # PyMuPDF
 import requests
 import tempfile
+import json
 
 app = Flask(__name__)
 
@@ -18,7 +19,7 @@ def procesar_pdf():
         return jsonify({"error": "No se proporcionó URL del PDF"}), 400
 
     try:
-        # Descargar el PDF
+        # Descargar PDF
         response = requests.get(pdf_url)
         response.raise_for_status()
 
@@ -26,25 +27,27 @@ def procesar_pdf():
             tmp_file.write(response.content)
             ruta = tmp_file.name
 
-        # Abrir PDF y extraer texto por bloques ordenados
+        # Extraer texto por bloques
         doc = fitz.open(ruta)
         texto_completo = ""
         for page in doc:
             bloques = page.get_text("blocks")
-            bloques_ordenados = sorted(bloques, key=lambda b: (b[1], b[0]))  # ordenar por coordenadas (y, x)
+            bloques_ordenados = sorted(bloques, key=lambda b: (b[1], b[0]))
             for b in bloques_ordenados:
                 contenido = b[4].strip()
-                if contenido:  # evitar bloques vacíos
+                if contenido:
                     texto_completo += contenido + "\n"
         doc.close()
 
-        # Normalizar texto a UTF-8 limpio
+        # Normalizar y dividir
         texto_completo = texto_completo.encode('utf-8', 'ignore').decode('utf-8')
-
-        # Dividir en partes de 8000 caracteres
         partes = [texto_completo[i:i + 8000] for i in range(0, len(texto_completo), 8000)]
 
-        return jsonify({"partes": partes})
+        return app.response_class(
+            response=json.dumps({"partes": partes}, ensure_ascii=False),
+            status=200,
+            mimetype='application/json'
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
