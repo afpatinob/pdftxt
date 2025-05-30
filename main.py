@@ -18,6 +18,7 @@ def procesar_pdf():
         return jsonify({"error": "No se proporcionó URL del PDF"}), 400
 
     try:
+        # Descargar el PDF
         response = requests.get(pdf_url)
         response.raise_for_status()
 
@@ -25,13 +26,26 @@ def procesar_pdf():
             tmp_file.write(response.content)
             ruta = tmp_file.name
 
+        # Abrir PDF y extraer texto por bloques ordenados
         doc = fitz.open(ruta)
-        texto = ""
-        for pagina in doc:
-            texto += pagina.get_text()
+        texto_completo = ""
+        for page in doc:
+            bloques = page.get_text("blocks")
+            bloques_ordenados = sorted(bloques, key=lambda b: (b[1], b[0]))  # ordenar por coordenadas (y, x)
+            for b in bloques_ordenados:
+                contenido = b[4].strip()
+                if contenido:  # evitar bloques vacíos
+                    texto_completo += contenido + "\n"
         doc.close()
 
-        return jsonify({"texto": texto[:15000]})
+        # Normalizar texto a UTF-8 limpio
+        texto_completo = texto_completo.encode('utf-8', 'ignore').decode('utf-8')
+
+        # Dividir en partes de 8000 caracteres
+        partes = [texto_completo[i:i + 8000] for i in range(0, len(texto_completo), 8000)]
+
+        return jsonify({"partes": partes})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
